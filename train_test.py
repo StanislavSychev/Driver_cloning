@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import simplejson
 import matplotlib.pyplot as plt
+from r_score import R2Score
 
 
 class Driver(nn.Module):
@@ -83,7 +84,7 @@ if __name__ == '__main__':
                 stop_move = len(action)
             if a[1] != do_nothing:
                 stop_move = None
-            action.append(torch.FloatTensor([a[1][0]]))
+            action.append(torch.FloatTensor([a[1][2]]))
             # action.append(torch.FloatTensor([a[1][0]]))
         if ent[0] == "STATE:":
             s = simplejson.loads(ent[1])
@@ -119,8 +120,9 @@ if __name__ == '__main__':
     # model = Driver(5, 5, 10, out_size)
     # model = LinearDriver(16, 500, 1, out_size)
     model = LinearConvDriver(50, 4, 4, 100, 1, out_size)
-    # loss_function = nn.MSELoss()
-    loss_function = nn.L1Loss()
+    loss_function = nn.MSELoss()
+    # loss_function = nn.L1Loss()
+    score = R2Score()
     # optimizer = optim.SGD(model.parameters(), lr=0.01)
     optimizer = optim.Adam(model.parameters())
     err = []
@@ -133,14 +135,14 @@ if __name__ == '__main__':
         # print(g)
         # print(action)
         loss = loss_function(got, action)
-        err.append(loss.item() * 100)
+        # err.append(loss.item())
+        err.append(score(got, action).item())
         if epoch == max_epoch - 1 or epoch == 0:
-            final_loss = loss.item()
             print(got)
         loss.backward()
         optimizer.step()
     print(action)
-    print(final_loss)
+    print(err[-1])
     plt.plot(err)
     plt.show()
 
