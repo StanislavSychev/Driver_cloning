@@ -2,12 +2,12 @@ import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 from r_score import R2Score
-from data_reader import read_trajectory
+from data_reader import read_trajectory, read_driver_trajectories
 from model import LinearConvDriver
 
 
 if __name__ == '__main__':
-    state, action = read_trajectory("18.1_2", 0)
+    state, action = read_driver_trajectories("22.1", 0)
     # model = Driver(5, 5, 10, out_size)
     # model = LinearDriver(16, 500, 1, out_size)
     model = LinearConvDriver(50, 4, 4, 100, 1, 1)
@@ -18,7 +18,7 @@ if __name__ == '__main__':
     optimizer = optim.Adam(model.parameters())
     err = []
     final_loss = 0
-    max_epoch = 5000
+    max_epoch = 500
     for epoch in range(max_epoch):
         print(epoch)
         model.zero_grad()

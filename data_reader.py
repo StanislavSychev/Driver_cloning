@@ -1,16 +1,20 @@
 import torch
 import simplejson
+import pandas as pd
+import numpy as np
+from os import listdir
 
 
-def read_trajectory(filename, action_type):
+def read_trajectory(fold, filename, action_type):
     state = []
     action = []
     do_nothing = [0, 0, 0]
     didnt_move = True
     stop_move = None
-    data = open("parsedData/" + filename, 'r')
+    data = open(fold + "/" + filename, 'r')
     fst = None
     lst = None
+    start = 2
     for line in data.readlines():
         ent = line.split("\t")
         if ent[0] == "ACTION:":
@@ -18,7 +22,8 @@ def read_trajectory(filename, action_type):
                 fst = "ACTION"
             lst = "ACTION"
             a = simplejson.loads(ent[1])
-            if a[1] == do_nothing and didnt_move:
+            if a[1] == do_nothing and didnt_move or (start > 0):
+                start -= 1
                 state = state[:-1]
                 continue
             didnt_move = False
@@ -46,8 +51,8 @@ def read_trajectory(filename, action_type):
             #     new_state.append(torch.FloatTensor([d[1], d[2][0], d[2][2], d[3][1], d[3][3]]))
             # state.append(new_state)
             state.append(torch.FloatTensor(self))
-    # if lst == "STATE":
-    #     state = state[:-1]
+    if lst == "STATE":
+        state = state[:-1]
     # if fst == "ACTION":
     #     action = action[1:]
     # action = action[1:]
@@ -55,11 +60,67 @@ def read_trajectory(filename, action_type):
     if stop_move:
         action = action[:stop_move]
         state = state[:stop_move]
+    l = [s.size(0) for s in state]
+    for i in range(len(l)):
+        if l[i] < 16:
+            del state[i]
+            del action[i]
     state = torch.cat(state).view(len(state), -1)
     action = torch.cat(action).view(len(action), 1)
-    state = state.view(state.size(0), 1, 4, 4)
     return state, action
 
 
+def read_driver_trajectories(fold, dname, action_type):
+    s = []
+    a = []
+    for files in listdir(fold):
+        if dname in files and files[-1] != '1':
+            st, ac = read_trajectory(fold, files, action_type)
+            s.append(st)
+            a.append(ac)
+    l = 0
+    for ac in a:
+        l += ac.size(0)
+    a = torch.cat(a).view(l, -1)
+    s = torch.cat(s).view(l, -1)
+    return s, a
+
+
+def read_all(fold, action_type):
+    qest = pd.read_csv("preQuestionnaire.csv", index_col=0)
+    qest = qest.fillna(0)
+    qest = qest.replace({'gender': r'^[f|F].*'}, {'gender': 1}, regex=True)
+    qest = qest.replace({'gender': r'^[m|M].*'}, {'gender': 2}, regex=True)
+    qest = qest.replace({'gender': r'^h.*'}, {'gender': 0}, regex=True)
+
+    def get_by_id(driver_id):
+        row = qest[qest.ID == driver_id]
+        row = row.drop(columns=['ID'])
+        return row.values
+
+    s = []
+    a = []
+    for files in listdir(fold):
+        if files[-1] == '1':
+            continue
+        st, ac = read_trajectory(fold, files, action_type)
+        p = get_by_id(float(files[:-2]))
+        p = np.tile(p, (st.size(0), 1))
+        p = torch.FloatTensor(p)
+        st = torch.cat((p, st), 1)
+        a.append(ac)
+        s.append(st)
+    l = 0
+    for ac in a:
+        l += ac.size(0)
+    a = torch.cat(a).view(l, -1)
+    s = torch.cat(s).view(l, -1)
+    return s, a
+
+
 if __name__ == '__main__':
-    s, a = read_trajectory("18.1_2", 0)
+    s, a = read_all(0)
+    p, s = s.split(22, 2)
+    print(p.size())
+    print(s.size())
+    print(a.size())

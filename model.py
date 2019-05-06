@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 
@@ -52,9 +53,43 @@ class LinearConvDriver(nn.Module):
         self.act = nn.Tanh()
 
     def forward(self, x):
+        x = x.view(x.size(0), 1, 4, 4)
         x = self.act(self.conv1(x))
         x = x.view(x.size(0), -1)
         x = self.act(self.hidden1(x))
         for h in self.hidden:
             x = self.act(h(x))
         return self.act(self.res(x))
+
+
+class DriverControls(nn.Module):
+
+    def __init__(self, conv_number, number_of_drivers, input_size, hidden_size, n, qest_dim, qest_hidden, output_dim):
+        super(DriverControls, self).__init__()
+        self.conv1 = nn.Conv2d(1, conv_number, (number_of_drivers, 1))
+        self.qest = nn.Linear(qest_dim, qest_hidden)
+        self.hidden1 = nn.Linear(conv_number * input_size + qest_hidden, hidden_size)
+        self.hidden = [nn.Linear(hidden_size, hidden_size) for _ in range(n)]
+        self.res = nn.Linear(hidden_size, output_dim)
+        self.act = nn.Tanh()
+        self.nd = number_of_drivers
+        self.np = qest_dim
+
+    def forward(self, x):
+        p, x = x.split(self.np, 2)
+        x = x.view(x.size(0), 1, 4, 4)
+        x = self.act(self.conv1(x))
+        p = self.act(self.qest(p))
+        p = p.view(p.size(0), -1)
+        x = x.view(x.size(0), -1)
+        x = torch.cat((x, p), 1)
+        x = self.act(self.hidden1(x))
+        for h in self.hidden:
+            x = self.act(h(x))
+        return self.act(self.res(x))
+
+
+def load_model(filename):
+    m = torch.load(filename)
+    m.eval()
+    return m
