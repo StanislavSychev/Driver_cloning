@@ -3,8 +3,10 @@ import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 from r_score import R2Score
-from data_reader import read_all
-from model import DriverControls
+from data_reader import read_all, read_driver_trajectories
+from model import DriverControls, LinearConvDriver
+from os import listdir
+from os.path import exists
 
 
 def train_action(model, action_type):
@@ -14,7 +16,7 @@ def train_action(model, action_type):
     score = R2Score()
     optimizer = optim.Adam(model.parameters())
     err = []
-    max_epoch = 1
+    max_epoch = 1000
     for epoch in range(max_epoch):
         model.zero_grad()
         got = model(state)
@@ -44,6 +46,50 @@ def test_action(model, action_type):
     print(score(got, action))
 
 
+def train_driver(driver, action_type):
+    model = LinearConvDriver(100, 4, 4, 100, 5, 1)
+    if driver == '888':
+        return
+    state, action = read_driver_trajectories("parsedData", driver, action_type)
+    state = state.view(state.size(0), 1, -1)
+    loss_function = nn.MSELoss()
+    score = R2Score()
+    optimizer = optim.Adam(model.parameters())
+    err = []
+    max_epoch = 2000
+    for epoch in range(max_epoch):
+        model.zero_grad()
+        got = model(state)
+        loss = loss_function(got, action)
+        err.append(score(got, action).item())
+        print("{}: {}".format(epoch, err[-1]))
+        if epoch == max_epoch - 1 or epoch == 0:
+            print(got)
+        loss.backward()
+        optimizer.step()
+
+    # print(action)
+    # print(score(model(state), action).item())
+    # fig, ax = plt.subplots()
+    # ax.plot(err, 'k')
+    # ax.set(xlabel='epoch', ylabel='R2-score',
+    #        title='Learning curve for action {}'.format(action_type))
+    # fig.savefig("action{}.png".format(action_type))
+    # plt.show()
+    torch.save(model, "models/{}A{}.pt".format(driver, action_type))
+
+def train_action_models(action):
+    dreivers = set([s[:-2] for s in listdir("parsedData")])
+    print(dreivers)
+    for d in dreivers:
+        print(d)
+        if not exists("models/{}A{}.pt".format(d, action)):
+            train_driver(d, action)
+
+
 if __name__ == '__main__':
-    model = DriverControls(50, 4, 4, 100, 1, 22, 5, 1)
-    train_action(model, 0)
+    # model = DriverControls(100, 5,  4, 4, 100, 5, 22, 22, 1)
+    # train_action(model, 0)
+    train_action_models(1)
+    train_action_models(2)
+    # train_driver("18.1", 0)

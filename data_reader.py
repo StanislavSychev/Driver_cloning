@@ -118,6 +118,22 @@ def read_all(fold, action_type):
     return s, a
 
 
+def read_all_trajectories(fold, action_type):
+    s = []
+    a = []
+    for files in listdir(fold):
+        if files[-1] == '1':
+            continue
+        st, ac = read_trajectory(fold, files, action_type)
+        a.append(ac)
+        s.append(st)
+    l = 0
+    for ac in a:
+        l += ac.size(0)
+    a = torch.cat(a).view(l, -1)
+    s = torch.cat(s).view(l, -1)
+    return s, a
+
 if __name__ == '__main__':
     s, a = read_all(0)
     p, s = s.split(22, 2)

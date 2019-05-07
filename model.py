@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+import pandas as pd
+from sklearn.neighbors import NearestNeighbors
 
 
 class Driver(nn.Module):
@@ -64,25 +66,34 @@ class LinearConvDriver(nn.Module):
 
 class DriverControls(nn.Module):
 
-    def __init__(self, conv_number, number_of_drivers, input_size, hidden_size, n, qest_dim, qest_hidden, output_dim):
+    def __init__(self, conv_number1, conv_number2, number_of_drivers, input_size, hidden_size, n, qest_dim, qest_hidden, output_dim):
         super(DriverControls, self).__init__()
-        self.conv1 = nn.Conv2d(1, conv_number, (number_of_drivers, 1))
+        self.conv1 = nn.Conv2d(1, conv_number1, (number_of_drivers, 1))
+        self.convp = nn.Conv1d(1, conv_number1, qest_hidden - input_size + 1)
+        self.conv2 = nn.Conv2d(conv_number1, conv_number2, (2, 1))
         self.qest = nn.Linear(qest_dim, qest_hidden)
-        self.hidden1 = nn.Linear(conv_number * input_size + qest_hidden, hidden_size)
+        self.hidden1 = nn.Linear(conv_number2 * input_size, hidden_size)
         self.hidden = [nn.Linear(hidden_size, hidden_size) for _ in range(n)]
         self.res = nn.Linear(hidden_size, output_dim)
         self.act = nn.Tanh()
         self.nd = number_of_drivers
         self.np = qest_dim
+        self.ins = input_size
 
     def forward(self, x):
         p, x = x.split(self.np, 2)
-        x = x.view(x.size(0), 1, 4, 4)
+        x = x.view(x.size(0), 1, self.ins, self.ins)
         x = self.act(self.conv1(x))
         p = self.act(self.qest(p))
-        p = p.view(p.size(0), -1)
+        p = p.view(p.size(0), 1, -1)
+        p = self.act(self.convp(p))
+        x = x.view(x.size(0), x.size(1), -1)
+        x = torch.cat((x, p), 2)
+        x = x.view(x.size(0), x.size(1), 2, self.ins)
+        x = self.act(self.conv2(x))
+        # p = p.view(p.size(0), -1)
         x = x.view(x.size(0), -1)
-        x = torch.cat((x, p), 1)
+        # x = torch.cat((x, p), 1)
         x = self.act(self.hidden1(x))
         for h in self.hidden:
             x = self.act(h(x))
@@ -93,3 +104,28 @@ def load_model(filename):
     m = torch.load(filename)
     m.eval()
     return m
+
+
+def get_kn(p, k, qest):
+    x = qest.drop(columns=['ID']).values
+    y = qest['ID'].values
+    knn = NearestNeighbors(n_neighbors=k)
+    knn.fit(x, y)
+    dist, ind = knn.kneighbors(p)
+    print(y[list(ind)[0]])
+    return y[list(ind)[0]]
+
+
+class KNNDriver(nn.Module):
+
+    def __init__(self, drivers, action):
+        super(KNNDriver, self).__init__()
+        self.drivers = [load_model("models/{}A{}.pt".format(d, action)) for d in drivers]
+
+    def forward(self, x):
+        y = []
+        for d in self.drivers:
+            y.append(d(x))
+        y = torch.cat(tuple(y), 1)
+        y = torch.mean(y, dim=1, keepdim=True)
+        return y
