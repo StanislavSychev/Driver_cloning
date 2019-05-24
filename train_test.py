@@ -23,7 +23,6 @@ if __name__ == '__main__':
     qest = qest.replace({'gender': r'^[m|M].*'}, {'gender': 2}, regex=True)
     qest = qest.replace({'gender': r'^h.*'}, {'gender': 0}, regex=True)
 
-
     absent = []
     for i in qest.ID:
         if str(i) not in dreivers:

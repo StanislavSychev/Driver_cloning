@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import pandas as pd
 from sklearn.neighbors import NearestNeighbors
+import numpy as np
+from os import listdir, path
 
 
 class Driver(nn.Module):
@@ -112,7 +114,7 @@ def get_kn(p, k, qest):
     knn = NearestNeighbors(n_neighbors=k)
     knn.fit(x, y)
     dist, ind = knn.kneighbors(p)
-    print(y[list(ind)[0]])
+    # print(y[list(ind)[0]])
     return y[list(ind)[0]]
 
 
@@ -120,7 +122,7 @@ class KNNDriver(nn.Module):
 
     def __init__(self, drivers, action):
         super(KNNDriver, self).__init__()
-        self.drivers = [load_model("models/{}A{}.pt".format(d, action)) for d in drivers]
+        self.drivers = [load_model(path.join("models", "{}A{}.pt".format(d, action))) for d in drivers]
 
     def forward(self, x):
         y = []
@@ -129,3 +131,61 @@ class KNNDriver(nn.Module):
         y = torch.cat(tuple(y), 1)
         y = torch.mean(y, dim=1, keepdim=True)
         return y
+
+
+class KNNlWrapper:
+
+    def __init__(self, p, k):
+        p = np.array(p).reshape((1, len(p)))
+        qest = pd.read_csv('preQuestionnaire.csv', index_col=0)
+        qest = qest.fillna(0)
+        qest = qest.replace({'gender': r'^[f|F].*'}, {'gender': 1}, regex=True)
+        qest = qest.replace({'gender': r'^[m|M].*'}, {'gender': 2}, regex=True)
+        qest = qest.replace({'gender': r'^h.*'}, {'gender': 0}, regex=True)
+        dreivers = list(set([s[:-5] for s in listdir("models")]))
+        absent = []
+        for i in qest.ID:
+            if str(i) not in dreivers:
+                absent.append(i)
+        for d in absent:
+            qest = qest[qest.ID != d]
+        ids = get_kn(p, k, qest)
+        self.act1 = KNNDriver(ids, 0)
+        self.act2 = KNNDriver(ids, 1)
+        self.act3 = KNNDriver(ids, 2)
+
+    def __call__(self, x):
+        x = torch.FloatTensor(x)
+        x = x.view(1, 1, -1)
+        act1 = self.act1(x).item()
+        act2 = self.act2(x).item()
+        act3 = self.act3(x).item()
+        return [act1, act2, act3]
+
+
+class NNWrapper:
+
+    def __init__(self, p):
+        p = torch.FloatTensor(p)
+        self.p = p.view(1, 1, -1)
+        self.act1 = load_model("models/Action0.pt")
+        self.act2 = load_model("models/Action1.pt")
+        self.act3 = load_model("models/Action2.pt")
+
+    def __call__(self, x):
+        x = torch.FloatTensor(x)
+        x = x.view(1, 1, -1)
+        x = torch.cat((x, self.p), 2)
+        act1 = self.act1(x).item()
+        act2 = self.act2(x).item()
+        act3 = self.act3(x).item()
+        return [act1, act2, act3]
+
+
+if __name__ == '__main__':
+    qest = pd.read_csv("preQuestionnaire.csv", index_col=0)
+    qest = qest.fillna(0)
+    qest = qest.replace({'gender': r'^[f|F].*'}, {'gender': 1}, regex=True)
+    qest = qest.replace({'gender': r'^[m|M].*'}, {'gender': 2}, regex=True)
+    qest = qest.replace({'gender': r'^h.*'}, {'gender': 0}, regex=True)
+    print(list(qest.loc[1]))

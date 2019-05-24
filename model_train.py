@@ -3,20 +3,21 @@ import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 from r_score import R2Score
-from data_reader import read_all, read_driver_trajectories
+from data_reader import read_all, read_driver_trajectories, read_all_trajectories
 from model import DriverControls, LinearConvDriver
 from os import listdir
 from os.path import exists
 
 
 def train_action(model, action_type):
-    state, action = read_all("parsedData", action_type)
+    # state, action = read_all("parsedData", action_type)
+    state, action = read_all_trajectories("parsedData", action_type)
     state = state.view(state.size(0), 1, -1)
     loss_function = nn.MSELoss()
     score = R2Score()
     optimizer = optim.Adam(model.parameters())
     err = []
-    max_epoch = 1000
+    max_epoch = 2000
     for epoch in range(max_epoch):
         model.zero_grad()
         got = model(state)
@@ -78,6 +79,7 @@ def train_driver(driver, action_type):
     # plt.show()
     torch.save(model, "models/{}A{}.pt".format(driver, action_type))
 
+
 def train_action_models(action):
     dreivers = set([s[:-2] for s in listdir("parsedData")])
     print(dreivers)
@@ -88,8 +90,9 @@ def train_action_models(action):
 
 
 if __name__ == '__main__':
-    # model = DriverControls(100, 5,  4, 4, 100, 5, 22, 22, 1)
-    # train_action(model, 0)
-    train_action_models(1)
-    train_action_models(2)
+    # model = DriverControls(100, 5, 4, 4, 200, 5, 22, 22, 1)
+    model = LinearConvDriver(100, 4, 4, 200, 5, 1)
+    train_action(model, 0)
+    # train_action_models(1)
+    # train_action_models(2)
     # train_driver("18.1", 0)
