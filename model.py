@@ -66,6 +66,62 @@ class LinearConvDriver(nn.Module):
         return self.act(self.res(x))
 
 
+class LinearConvQestDriver(nn.Module):
+
+    def __init__(self, conv_number, number_of_drivers, input_size, qest_size, hidden_size, n, output_dim):
+        super(LinearConvQestDriver, self).__init__()
+        self.qest = nn.Linear(qest_size, input_size)
+        self.conv1 = nn.Conv2d(1, conv_number, (number_of_drivers + 1, 1))
+        self.hidden1 = nn.Linear(conv_number * input_size, hidden_size)
+        self.hidden = [nn.Linear(hidden_size, hidden_size) for _ in range(n)]
+        self.res = nn.Linear(hidden_size, output_dim)
+        self.act = nn.Tanh()
+        self.np = qest_size
+        self.ip = input_size
+        self.nd = number_of_drivers
+
+    def forward(self, x):
+        p, x = x.split(self.np, 2)
+        p = self.qest(p)
+        p = p.view(p.size(0), 1, 1, self.ip)
+        x = x.view(x.size(0), 1, self.nd, self.ip)
+        x = torch.cat((x, p), 2)
+        x = self.act(self.conv1(x))
+        x = x.view(x.size(0), -1)
+        x = self.act(self.hidden1(x))
+        for h in self.hidden:
+            x = self.act(h(x))
+        return self.act(self.res(x))
+
+
+class LinearConvQestDriver1(nn.Module):
+
+    def __init__(self, conv_number, number_of_drivers, input_size, qest_size, hidden_qest, hidden_size, n, output_dim):
+        super(LinearConvQestDriver1, self).__init__()
+        self.qest = nn.Linear(qest_size, hidden_qest * input_size)
+        self.conv1 = nn.Conv2d(1, conv_number, (number_of_drivers + hidden_qest, 1))
+        self.hidden1 = nn.Linear(conv_number * input_size, hidden_size)
+        self.hidden = [nn.Linear(hidden_size, hidden_size) for _ in range(n)]
+        self.res = nn.Linear(hidden_size, output_dim)
+        self.act = nn.Tanh()
+        self.np = qest_size
+        self.ip = input_size
+        self.nd = number_of_drivers
+
+    def forward(self, x):
+        p, x = x.split(self.np, 2)
+        p = self.qest(p)
+        p = p.view(p.size(0), 1, -1, self.ip)
+        x = x.view(x.size(0), 1, self.nd, self.ip)
+        x = torch.cat((x, p), 2)
+        x = self.act(self.conv1(x))
+        x = x.view(x.size(0), -1)
+        x = self.act(self.hidden1(x))
+        for h in self.hidden:
+            x = self.act(h(x))
+        return self.act(self.res(x))
+
+
 class DriverControls(nn.Module):
 
     def __init__(self, conv_number1, conv_number2, number_of_drivers, input_size, hidden_size, n, qest_dim, qest_hidden, output_dim):
@@ -149,6 +205,7 @@ class KNNlWrapper:
                 absent.append(i)
         for d in absent:
             qest = qest[qest.ID != d]
+        print(qest.loc[1])
         ids = get_kn(p, k, qest)
         self.act1 = KNNDriver(ids, 0)
         self.act2 = KNNDriver(ids, 1)

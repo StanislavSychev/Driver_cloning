@@ -4,8 +4,13 @@ import pandas as pd
 import numpy as np
 from os import listdir
 
+wait = 0
+length = 0
+
 
 def read_trajectory(fold, filename, action_type):
+    global length, wait
+    length += 1
     state = []
     action = []
     do_nothing = [0, 0, 0]
@@ -23,6 +28,7 @@ def read_trajectory(fold, filename, action_type):
             lst = "ACTION"
             a = simplejson.loads(ent[1])
             if a[1] == do_nothing and didnt_move or (start > 0):
+                wait += 1
                 start -= 1
                 state = state[:-1]
                 continue
@@ -31,7 +37,10 @@ def read_trajectory(fold, filename, action_type):
                 stop_move = len(action)
             if a[1] != do_nothing:
                 stop_move = None
-            action.append(torch.FloatTensor([a[1][action_type]]))
+            if action_type == 3:
+                action.append(torch.FloatTensor([a[1][1] - a[1][2]]))
+            else:
+                action.append(torch.FloatTensor([a[1][action_type]]))
             # action.append(torch.FloatTensor([a[1][0]]))
         if ent[0] == "STATE:":
             if fst is None:
@@ -134,9 +143,8 @@ def read_all_trajectories(fold, action_type):
     s = torch.cat(s).view(l, -1)
     return s, a
 
+
 if __name__ == '__main__':
-    s, a = read_all(0)
-    p, s = s.split(22, 2)
-    print(p.size())
-    print(s.size())
-    print(a.size())
+    s, a = read_all("parsedData", 0)
+    # p, s = s.split(22, 2)
+    print(wait / length)
